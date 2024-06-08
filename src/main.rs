@@ -63,7 +63,8 @@ enum Subcommands {
     Start(StartArgs),
     Stop(StopArgs),
     Ls(LsArgs),
-    // config (cgroups)
+    Copy(CpArgs),
+    //Configuration(ConfigurationArgs)
 }
 
 #[derive(Debug, Args)]
@@ -373,6 +374,27 @@ struct LsArgs {
 
     #[arg(short, long, value_name = "GROUPS", value_delimiter=',', help = "Comma separated list of groups a container must have to be displayed")]
     groups: Option<Vec<String>>,
+}
+
+#[derive(Debug, Args)]
+#[command(
+    version,
+    about,
+    long_about = "Copy files/folders between a container and the local filesystem",
+    visible_aliases = ["cp"]
+)]
+struct CpArgs {
+    #[arg(value_name="[CONTAINER]:SRC_PATH", help="Source path (can be from the local host or from a container)")]
+    source: String,
+
+    #[arg(value_name="[CONTAINER]:DEST_PATH", help="Destination path (can be to the local host or to a container)")]
+    destination: String,
+
+    #[arg(short, long, help="Archive mode (copy all uid/gid information)")]
+    archive: Option<bool>,
+
+    #[arg(short = 'L', long, help="Always follow symbol link in SRC_PATH")]
+    follow_link: Option<bool>,
 }
 
 fn main() {

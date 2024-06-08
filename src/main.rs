@@ -59,12 +59,12 @@ struct CmtCli {
 enum Subcommands {
     Create(CreateArgs),
     Delete(DeleteArgs),
-    Exec(ExecArgs),
+    Execute(ExecuteArgs),
     Start(StartArgs),
     Stop(StopArgs),
-    Ls(LsArgs),
-    Copy(CpArgs),
-    //Configuration(ConfigurationArgs)
+    List(ListArgs),
+    Copy(CopyArgs),
+    Configuration(ConfigurationArgs),
 }
 
 #[derive(Debug, Args)]
@@ -72,7 +72,7 @@ enum Subcommands {
     version,
     about,
     long_about = "Create and start instances from images",
-    visible_aliases = ["init"]
+    visible_aliases = ["init", "new"]
 )]
 struct CreateArgs {
     #[arg(short, long, help = "Name for the new container", required = true)]
@@ -116,7 +116,11 @@ enum Backingstore {
     long_about = "The container root filesystem will be a directory"
 )]
 struct DIRArgs {
-    #[arg(value_name = "DIR", default_value="/var/lib/lxc/container/rootfs", help = "Place rootfs directory under DIR")]
+    #[arg(
+        value_name = "DIR",
+        default_value = "/var/lib/lxc/container/rootfs",
+        help = "Place rootfs directory under DIR"
+    )]
     dir: String,
 }
 
@@ -200,7 +204,7 @@ struct DeleteArgs {
     force: bool,
 
     #[arg(long, value_name = "FILE", help = "Load configuration file FILE")]
-    rcfile: bool,
+    rcfile: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -208,36 +212,49 @@ struct DeleteArgs {
     version,
     about,
     long_about = "Execute commands in containers",
-    visible_aliases = ["execute"])]
-struct ExecArgs {
-    #[arg(
-        required=true,
-        value_name="NAME",
-        help="NAME of the container"
-    )]
+    visible_aliases = ["exec"])]
+struct ExecuteArgs {
+    #[arg(required = true, value_name = "NAME", help = "NAME of the container")]
     name: String,
 
-    #[arg(
-        required = true,
-        help="COMMAND to execute into this container")]
+    #[arg(required = true, help = "COMMAND to execute into this container")]
     command: String,
-    
+
     #[arg(short, long, help = "Daemonize the container")]
     daemon: bool,
 
-    #[arg(long, default_value="/root", help = "Directory to run the command in")]
+    #[arg(
+        long,
+        default_value = "/root",
+        help = "Directory to run the command in"
+    )]
     cwd: Option<String>,
 
-    #[arg(short, long, value_delimiter = ',', help = "Environment variable(s) to set [e.g. HOME=/home/foo][comma-separated]")]
+    #[arg(
+        short,
+        long,
+        value_delimiter = ',',
+        help = "Environment variable(s) to set [e.g. HOME=/home/foo][comma-separated]"
+    )]
     env: Option<Vec<String>>,
 
-    #[arg(long, value_name="FILE", help = "Environment variable FILE")]
+    #[arg(long, value_name = "FILE", help = "Environment variable FILE")]
     envfile: Option<String>,
 
-    #[arg(short, long, default_value="0", help = "User ID to run the command as")]
+    #[arg(
+        short,
+        long,
+        default_value = "0",
+        help = "User ID to run the command as"
+    )]
     uid: Option<String>,
 
-    #[arg(short, long, default_value="0", help = "Group ID to run the command as")]
+    #[arg(
+        short,
+        long,
+        default_value = "0",
+        help = "Group ID to run the command as"
+    )]
     gid: Option<String>,
 }
 
@@ -254,44 +271,88 @@ struct StartArgs {
         long,
         value_name = "NAME",
         help = "NAME of the container",
-        required=true
+        required = true
     )]
     name: String,
 
     #[arg(short, long, help = "Daemonize the container (default)")]
     daemon: bool,
 
-    #[arg(short = 'F', long, help = "Start with the current tty attached to /dev/console")]
+    #[arg(
+        short = 'F',
+        long,
+        help = "Start with the current tty attached to /dev/console"
+    )]
     foreground: bool,
 
-    #[arg(short, long, value_name = "FILE", help = "Create a file with the process id")]
+    #[arg(
+        short,
+        long,
+        value_name = "FILE",
+        help = "Create a file with the process id"
+    )]
     pidfile: Option<String>,
 
-    #[arg(short, long, value_name = "FILE", help = "Load configuration file FILE")]
+    #[arg(long, value_name = "FILE", help = "Load configuration file FILE")]
     rcfile: Option<String>,
 
-    #[arg(short, long, value_name = "FILE", help = "Use specified FILE for the container console")]
+    #[arg(
+        short,
+        long,
+        value_name = "FILE",
+        help = "Use specified FILE for the container console"
+    )]
     console: Option<String>,
 
-    #[arg(short = 'L', long, value_name = "FILE", help = "Log container console output to FILE")]
+    #[arg(
+        short = 'L',
+        long,
+        value_name = "FILE",
+        help = "Log container console output to FILE"
+    )]
     console_log: Option<String>,
 
-    #[arg(short = 'C', long, help = "If any fds are inherited, close them (Note: --daemon implies --close-all-fds)")]
+    #[arg(
+        short = 'C',
+        long,
+        help = "If any fds are inherited, close them (Note: --daemon implies --close-all-fds)"
+    )]
     close_all_fds: bool,
 
-    #[arg(short = 's', long, value_name = "KEY=VAL", help = "Assign VAL to configuration variable KEY")]
+    #[arg(
+        short = 's',
+        long,
+        value_name = "KEY=VAL",
+        help = "Assign VAL to configuration variable KEY"
+    )]
     define: Option<String>,
 
-    #[arg(long, value_name = "NAME", help = "Share a network namespace with another container or pid")]
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Share a network namespace with another container or pid"
+    )]
     share_net: Option<String>,
 
-    #[arg(long, value_name = "NAME", help = "Share an IPC namespace with another container or pid")]
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Share an IPC namespace with another container or pid"
+    )]
     share_ipc: Option<String>,
 
-    #[arg(long, value_name = "NAME", help = "Share a UTS namespace with another container or pid")]
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Share a UTS namespace with another container or pid"
+    )]
     share_uts: Option<String>,
 
-    #[arg(long, value_name = "NAME", help = "Share a PID namespace with another container or pid")]
+    #[arg(
+        long,
+        value_name = "NAME",
+        help = "Share a PID namespace with another container or pid"
+    )]
     share_pid: Option<String>,
 }
 
@@ -308,26 +369,42 @@ struct StopArgs {
         long,
         value_name = "NAME",
         help = "NAME of the container",
-        required=true
+        required = true
     )]
     name: String,
 
     #[arg(short, long, help = "Reboot the container")]
     reboot: bool,
 
-    #[arg(short = 'W', long, help = "Don't wait for shutdown or reboot to complete")]
+    #[arg(
+        short = 'W',
+        long,
+        help = "Don't wait for shutdown or reboot to complete"
+    )]
     nowait: bool,
 
-    #[arg(short, long, value_name = "T", help = "Wait T seconds before hard-stopping")]
+    #[arg(
+        short,
+        long,
+        value_name = "T",
+        help = "Wait T seconds before hard-stopping"
+    )]
     timeout: Option<u64>,
 
-    #[arg(short, long, help = "Kill container rather than request clean shutdown")]
+    #[arg(
+        short,
+        long,
+        help = "Kill container rather than request clean shutdown"
+    )]
     kill: bool,
 
     #[arg(long, help = "Avoid using API locks")]
     nolock: bool,
 
-    #[arg(long, help = "Only request clean shutdown, don't force kill after timeout")]
+    #[arg(
+        long,
+        help = "Only request clean shutdown, don't force kill after timeout"
+    )]
     nokill: bool,
 
     #[arg(long, value_name = "FILE", help = "Load configuration file FILE")]
@@ -339,16 +416,21 @@ struct StopArgs {
     version,
     about,
     long_about = "List containers",
-    visible_aliases = ["list", "show"]
+    visible_aliases = ["ls", "show", "sh"]
 )]
-struct LsArgs {
+struct ListArgs {
     #[arg(short = '1', long, help = "Show one entry per line")]
     line: bool,
 
     #[arg(short, long, help = "Use a fancy, column-based output")]
     fancy: bool,
 
-    #[arg(short = 'F', long, value_name = "COLUMNS", help = "Comma separated list of columns to show in the fancy output (valid columns: NAME, STATE, PID, RAM, SWAP, AUTOSTART, GROUPS, INTERFACE, IPV4 and IPV6, UNPRIVILEGED)")]
+    #[arg(
+        short = 'F',
+        long,
+        value_name = "COLUMNS",
+        help = "Comma separated list of columns to show in the fancy output (valid columns: NAME, STATE, PID, RAM, SWAP, AUTOSTART, GROUPS, INTERFACE, IPV4 and IPV6, UNPRIVILEGED)"
+    )]
     fancy_format: Option<String>,
 
     #[arg(long, help = "List only active containers")]
@@ -366,13 +448,27 @@ struct LsArgs {
     #[arg(long, help = "List only defined containers")]
     defined: bool,
 
-    #[arg(long, value_name = "NUM", help = "List nested containers up to NUM levels of nesting (default is 5)")]
+    #[arg(
+        long,
+        value_name = "NUM",
+        help = "List nested containers up to NUM levels of nesting (default is 5)"
+    )]
     nesting: Option<u32>,
 
-    #[arg(long, value_name = "REGEX", help = "Filter container names by regular expression")]
+    #[arg(
+        long,
+        value_name = "REGEX",
+        help = "Filter container names by regular expression"
+    )]
     filter: Option<String>,
 
-    #[arg(short, long, value_name = "GROUPS", value_delimiter=',', help = "Comma separated list of groups a container must have to be displayed")]
+    #[arg(
+        short,
+        long,
+        value_name = "GROUPS",
+        value_delimiter = ',',
+        help = "Comma separated list of groups a container must have to be displayed"
+    )]
     groups: Option<Vec<String>>,
 }
 
@@ -383,18 +479,48 @@ struct LsArgs {
     long_about = "Copy files/folders between a container and the local filesystem",
     visible_aliases = ["cp"]
 )]
-struct CpArgs {
-    #[arg(value_name="[CONTAINER]:SRC_PATH", help="Source path (can be from the local host or from a container)")]
+struct CopyArgs {
+    #[arg(
+        value_name = "[CONTAINER]:SRC_PATH",
+        help = "Source path (can be from the local host or from a container)"
+    )]
     source: String,
 
-    #[arg(value_name="[CONTAINER]:DEST_PATH", help="Destination path (can be to the local host or to a container)")]
+    #[arg(
+        value_name = "[CONTAINER]:DEST_PATH",
+        help = "Destination path (can be to the local host or to a container)"
+    )]
     destination: String,
 
-    #[arg(short, long, help="Archive mode (copy all uid/gid information)")]
+    #[arg(short, long, help = "Archive mode (copy all uid/gid information)")]
     archive: Option<bool>,
 
-    #[arg(short = 'L', long, help="Always follow symbol link in SRC_PATH")]
+    #[arg(short = 'L', long, help = "Always follow symbol link in SRC_PATH")]
     follow_link: Option<bool>,
+}
+
+
+// Aggregate the functionalities of:
+//  -   lxc-cgroups ✔
+//  -   lxc-info
+#[derive(Debug, Args)]
+#[command(
+    version,
+    about,
+    long_about = "Get or set the configurations for a container",
+    visible_aliases = ["cf", "config"]
+)]
+struct ConfigurationArgs {
+    #[arg(value_name = "NAME", help = "Name of container")]
+    name: String,
+
+    #[arg(long, value_name = "FILE", help = "Load configuration file FILE")]
+    rcfile: Option<String>,
+
+    #[arg(long, value_delimiter = ',', value_name = "value", help = "Value of a state object (for example, 'cpuset.cpus')")]
+    state_object: Option<Vec<String>>,
+
+    // TODO: add lxc-info capabilities
 }
 
 fn main() {

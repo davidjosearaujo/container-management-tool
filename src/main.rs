@@ -380,7 +380,13 @@ fn main() {
     match CmtCli::try_parse() {
         Ok(cli) => {
             println!("CLI arguments parsed successfully");
-            println!("{:?}", cli);
+            
+            match cli.sub {
+                // TODO: handle user input
+                Some(Subcommands::Start(_)) => println!("Start"),
+                Some(Subcommands::Delete(_)) => println!("Delete"),
+                _ => {},
+            };
         },
         Err(e) => {
             println!("Error parsing input! Please try again.\n");

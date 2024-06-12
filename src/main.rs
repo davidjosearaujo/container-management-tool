@@ -16,7 +16,7 @@ mod manage;
 mod utils;
 
 use clap::{Args, Parser, Subcommand};
-use std::{fmt::format, sync::atomic::Ordering};
+use std::sync::atomic::Ordering;
 
 #[macro_use]
 extern crate lazy_static;
@@ -96,128 +96,23 @@ struct CreateArgs {
     #[arg(
         short,
         long,
-        value_name = "TEMPLATE",
-        help = "Template to use to setup container"
+        value_name = "IMAGE",
+        default_value = "alpine:3.19:amd64",
+        help = "Image to use to setup container"
     )]
-    template: String,
+    image: String,
 
-    #[command(subcommand)]
-    sub: Option<Backingstore>,
-
-    #[arg(long, help = "Network name")]
-    network: Option<String>,
-}
-
-#[derive(Debug, Subcommand)]
-enum Backingstore {
-    DIR(DIRArgs),
-    LVM(LVMArgs),
-    RBD(RBDArgs),
-    ZFS(ZFSArgs),
-    LOOP(LOOPArgs),
-}
-
-#[derive(Debug, Args)]
-#[command(
-    about,
-    long_about = "The container root filesystem will be a directory"
-)]
-struct DIRArgs {
     #[arg(
+        short,
+        long,
         value_name = "DIR",
         default_value = "/var/lib/lxc/container/rootfs",
         help = "Place rootfs directory under DIR"
     )]
-    dir: String,
-}
+    dir: Option<String>,
 
-#[derive(Debug, Args)]
-#[command(about, long_about = "An lvm block device will be used")]
-struct LVMArgs {
-    #[arg(long, value_name = "LVNAME", help = "Use LVM lv name LVNAME")]
-    lvname: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "VG",
-        default_value = "lxc",
-        help = "Use LVM in volume group called VG"
-    )]
-    vgname: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "TP",
-        default_value = "lxc",
-        help = "Use LVM thin pool called TP"
-    )]
-    thinpool: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "TYPE",
-        default_value = "ext4",
-        help = "Create fstype TYPE"
-    )]
-    fstype: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "SIZE[U]",
-        default_value = "1G",
-        help = "Create filesystem of size SIZE * unit U (b|B|k|Km|Mg|G|t|T)"
-    )]
-    fssize: Option<String>,
-}
-
-#[derive(Debug, Args)]
-#[command(about, long_about = "An lvm block device will be used")]
-struct RBDArgs {
-    #[arg(long, value_name = "RBDNAME", help = "Use Ceph RBD name RBDNAME")]
-    rbdname: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "POOL",
-        default_value = "lxc",
-        help = "Use Ceph RBD pool name POOL"
-    )]
-    rbdpool: Option<String>,
-}
-
-#[derive(Debug, Args)]
-#[command(
-    about,
-    long_about = "A complete ZFS filesystem will be created for the container"
-)]
-struct ZFSArgs {
-    #[arg(
-        long,
-        value_name = "PATH",
-        default_value = "tank/lxc",
-        help = "Create zfs under given zfsroot"
-    )]
-    zfsroot: Option<String>,
-}
-
-#[derive(Debug, Args)]
-#[command(about, long_about = "Can set type and size in a lvm block")]
-struct LOOPArgs {
-    #[arg(
-        long,
-        value_name = "TYPE",
-        default_value = "ext4",
-        help = "Create fstype TYPE"
-    )]
-    fstype: Option<String>,
-
-    #[arg(
-        long,
-        value_name = "SIZE[U]",
-        default_value = "1G",
-        help = "Create filesystem of size SIZE * unit U (b|B|k|Km|Mg|G|t|T)"
-    )]
-    fssize: Option<String>,
+    #[arg(long, help = "Network name")]
+    network: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -258,32 +153,81 @@ struct ExecuteArgs {
     #[arg(required = true, help = "COMMAND to execute into this container")]
     command: String,
 
-    #[arg(short, long, help = "Daemonize the container")]
-    daemon: bool,
-
     #[arg(
+        short,
         long,
-        default_value = "/root",
-        help = "Directory to run the command in"
+        help = "Use elevated privileges instead of those of the container. If you don't specify privileges to be elevated as OR'd list: CAP, CGROUP and LSM (capabilities, cgroup and restrictions, respectively) then all of them will be elevated. WARNING: This may leak privileges into the container. Use with care."
     )]
-    cwd: Option<String>,
+    elevated_privileges: Option<String>,
 
     #[arg(
         short,
         long,
-        value_delimiter = ',',
-        help = "Environment variable(s) to set [e.g. HOME=/home/foo][comma-separated]"
+        help = "Use ARCH for program instead of container's own architecture."
     )]
-    env: Option<Vec<String>>,
+    arch: Option<String>,
 
-    #[arg(long, value_name = "FILE", help = "Environment variable FILE")]
-    envfile: Option<String>,
+    #[arg(
+        short,
+        long,
+        help = "Don't attach to all the namespaces of the container
+                    but just to the following OR'd list of flags: MOUNT, PID, UTSNAME, IPC, USER or NETWORK. WARNING: Using -s implies -e with all privileges elevated, it may therefore leak privileges into the container. Use with care."
+    )]
+    namespaces: Option<String>,
+
+    #[arg(
+        short = 'R',
+        long,
+        help = "Remount /sys and /proc if not attaching to the mount namespace when using -s in order to properly reflect the correct namespace context. See the lxc-attach(1) manual page for details"
+    )]
+    remount_sys_proc: Option<String>,
+
+    #[arg(
+        long,
+        help = "Clear all environment variables before attaching. The attached shell/program will start with only container=lxc set."
+    )]
+    clear_env: bool,
+
+    #[arg(
+        long,
+        help = "Keep all current environment variables. This is the current default behaviour, but is likely to change in the future."
+    )]
+    keep_env: bool,
+
+    #[arg(
+        short = 'L',
+        long,
+        value_name = "FILE",
+        help = "Log pty output to FILE"
+    )]
+    pty_log: Option<String>,
+
+    #[arg(
+        short = 'v',
+        long,
+        help = "Set an additional variable that is seen by the attached program in the container. May be specified multiple times."
+    )]
+    set_var: bool,
+
+    #[arg(
+        long,
+        help = "Keep an additional environment variable. Only applicable if --clear-env is specified. May be used"
+    )]
+    keep_var: bool,
+
+    #[arg(
+        short = 'f',
+        long,
+        value_name = "FILE",
+        help = "Load configuration file FILE"
+    )]
+    rcfile: Option<String>,
 
     #[arg(
         short,
         long,
         default_value = "0",
-        help = "User ID to run the command as"
+        help = "Execute COMMAND with UID inside the container"
     )]
     uid: Option<String>,
 
@@ -291,9 +235,17 @@ struct ExecuteArgs {
         short,
         long,
         default_value = "0",
-        help = "Group ID to run the command as"
+        help = "Execute COMMAND with GID inside the container"
     )]
     gid: Option<String>,
+
+    #[arg(
+        short,
+        long,
+        value_name="context",
+        help = "SELinux Context to transition into"
+    )]
+    context: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -513,22 +465,22 @@ struct ListArgs {
 )]
 struct CopyArgs {
     #[arg(
-        value_name = "[CONTAINER]:SRC_PATH",
+        value_name = "[CONTAINER:]SRC_PATH",
         help = "Source path (can be from the local host or from a container)"
     )]
     source: String,
 
     #[arg(
-        value_name = "[CONTAINER]:DEST_PATH",
+        value_name = "[CONTAINER:]DEST_PATH",
         help = "Destination path (can be to the local host or to a container)"
     )]
     destination: String,
 
     #[arg(short, long, help = "Archive mode (copy all uid/gid information)")]
-    archive: Option<bool>,
+    archive: bool,
 
     #[arg(short = 'L', long, help = "Always follow symbol link in SRC_PATH")]
-    follow_link: Option<bool>,
+    follow_link: bool,
 }
 
 #[derive(Debug, Args)]

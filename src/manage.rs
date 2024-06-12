@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    quiet_println, Backingstore, ConfigArgs, CopyArgs, CreateArgs, DeleteArgs, ExecuteArgs, ListArgs, StartArgs, StopArgs
-};
-use crate::utils;
+use std::path::Path;
 
-use core::sync::atomic::Ordering;
-use std::rc::Rc;
+use subprocess::Exec;
+
+use crate::{
+    quiet_println, ConfigArgs, CopyArgs, CreateArgs, DeleteArgs, ExecuteArgs, ListArgs, StartArgs, StopArgs
+};
 
 pub fn create(args: CreateArgs) -> String {
     let mut create_options: String = String::new();
@@ -26,52 +26,22 @@ pub fn create(args: CreateArgs) -> String {
         create_options.push_str(&format!(" --config={}", args.config.unwrap()));
     }
 
-    // Backingstore modes
-    let mut backingstore_options: String = String::new();
-    match args.sub {
-        Some(Backingstore::DIR(o_args)) => {
-            backingstore_options.push_str(
-                &format!(" --dir={}",
-                o_args.dir));
-        },
-        Some(Backingstore::LVM(o_args)) => {
-            backingstore_options.push_str(
-                &format!(" --bdev lvm --lvname={} --vgname={} --thinpool={} --fssize={} --fstype={}",
-                o_args.lvname.unwrap_or(args.name.clone()),
-                o_args.vgname.unwrap(),
-                o_args.thinpool.unwrap(),
-                o_args.fssize.unwrap(),
-                o_args.fstype.unwrap()));
-        },
-        Some(Backingstore::RBD(o_args)) => {
-            backingstore_options.push_str(
-                &format!(" --bdev rbd --rbdname={} --rbdpool={}",
-                o_args.rbdname.unwrap_or(args.name.clone()),
-                o_args.rbdpool.unwrap()));
-        },
-        Some(Backingstore::ZFS(o_args)) => {
-            backingstore_options.push_str(
-                &format!(" --bdev=zfs --zfsroot={}",
-                o_args.zfsroot.unwrap()));
-        },
-        Some(Backingstore::LOOP(o_args)) => {
-            backingstore_options.push_str(
-                &format!(" --bdev=loop --fssize={} --fstype={}",
-                o_args.fssize.unwrap(),
-                o_args.fstype.unwrap()));
-        },
-        _ => {}
+    if args.dir.is_some() {
+        if !Path::new(args.dir.clone().unwrap().as_str()).exists() {
+                _ = std::fs::create_dir(args.dir.clone().unwrap().as_str());
+            }
+        create_options.push_str(&format!(" --dir={}",args.dir.unwrap().as_str()));
     }
 
-    let cmdstr= format!(
-        "lxc-create --name={} --template={}{}{}",
-        args.name,
-        args.template,
-        create_options,
-        backingstore_options,
+    // Parse template
+    let image: Vec<&str> = args.image.split(':').collect();
+
+    let cmdstr = format!(
+        "lxc-create --name={}{} --template=download -- --dist={} --release={} --arch={}",
+        args.name, create_options, image[0], image[1], image[2],
     );
 
-    return cmdstr
+    cmdstr
 }
 
 pub fn delete(args: DeleteArgs) -> String {
@@ -88,93 +58,273 @@ pub fn delete(args: DeleteArgs) -> String {
     if args.rcfile.is_some() {
         delete_options.push_str(&format!(" --rcfile={}", args.rcfile.unwrap()));
     }
-    
-    let cmdstr= format!(
-        "lxc-destroy --name={}{}",
-        args.name,
-        delete_options,
-    );
 
-    return cmdstr;
+    let cmdstr = format!("lxc-destroy --name={}{}", args.name, delete_options,);
+
+    cmdstr
 }
 
 pub fn execute(args: ExecuteArgs) -> String {
-    let mut execute_options: String = String::new();
+    let mut execute_options = String::new();
 
-    if args.daemon {
-        execute_options.push_str(&format!(" --snapshots"));
+    if let Some(elevated_privileges) = args.elevated_privileges {
+        execute_options.push_str(&format!(" --elevated-privileges={}", elevated_privileges));
     }
 
-    let cmdstr= format!(
-        "lxc-execute --name={}{}",
-        args.name,
-        execute_options,
+    if let Some(arch) = args.arch {
+        execute_options.push_str(&format!(" --arch={}", arch));
+    }
+
+    if let Some(namespaces) = args.namespaces {
+        execute_options.push_str(&format!(" --namespaces={}", namespaces));
+    }
+
+    if let Some(remount_sys_proc) = args.remount_sys_proc {
+        execute_options.push_str(&format!(" --remount-sys-proc={}", remount_sys_proc));
+    }
+
+    if args.clear_env {
+        execute_options.push_str(" --clear-env");
+    }
+
+    if args.keep_env {
+        execute_options.push_str(" --keep-env");
+    }
+
+    if let Some(pty_log) = args.pty_log {
+        execute_options.push_str(&format!(" --pty-log={}", pty_log));
+    }
+
+    if args.set_var {
+        execute_options.push_str(" --set-var");
+    }
+
+    if args.keep_var {
+        execute_options.push_str(" --keep-var");
+    }
+
+    if let Some(rcfile) = args.rcfile {
+        execute_options.push_str(&format!(" --rcfile={}", rcfile));
+    }
+
+    if let Some(uid) = args.uid {
+        execute_options.push_str(&format!(" --uid={}", uid));
+    }
+
+    if let Some(gid) = args.gid {
+        execute_options.push_str(&format!(" --gid={}", gid));
+    }
+
+    if let Some(context) = args.context {
+        execute_options.push_str(&format!(" --context={}", context));
+    }
+
+    let cmdstr = format!(
+        "lxc-attach --name={} {} -- {}",
+        args.name, execute_options, args.command
     );
 
-    return cmdstr;
+    cmdstr
 }
 
-// TODO
-pub fn start(args: StartArgs) -> String{
-    let mut start_options: String = String::new();
+pub fn start(args: StartArgs) -> String {
+    let mut start_options = String::new();
 
-    let cmdstr= format!(
-        "lxc-start --name={}{}",
-        args.name,
-        start_options,
-    );
+    if args.daemon {
+        start_options.push_str(" --daemon");
+    }
 
-    return cmdstr;
+    if args.foreground {
+        start_options.push_str(" --foreground");
+    }
+
+    if let Some(pidfile) = args.pidfile {
+        start_options.push_str(&format!(" --pidfile={}", pidfile));
+    }
+
+    if let Some(rcfile) = args.rcfile {
+        start_options.push_str(&format!(" --rcfile={}", rcfile));
+    }
+
+    if let Some(console) = args.console {
+        start_options.push_str(&format!(" --console={}", console));
+    }
+
+    if let Some(console_log) = args.console_log {
+        start_options.push_str(&format!(" --console-log={}", console_log));
+    }
+
+    if args.close_all_fds {
+        start_options.push_str(" --close-all-fds");
+    }
+
+    if let Some(define) = args.define {
+        start_options.push_str(&format!(" --define={}", define));
+    }
+
+    if let Some(share_net) = args.share_net {
+        start_options.push_str(&format!(" --share-net={}", share_net));
+    }
+
+    if let Some(share_ipc) = args.share_ipc {
+        start_options.push_str(&format!(" --share-ipc={}", share_ipc));
+    }
+
+    if let Some(share_uts) = args.share_uts {
+        start_options.push_str(&format!(" --share-uts={}", share_uts));
+    }
+
+    if let Some(share_pid) = args.share_pid {
+        start_options.push_str(&format!(" --share-pid={}", share_pid));
+    }
+
+    let cmdstr = format!("lxc-start --name={}{}", args.name, start_options);
+
+    cmdstr
 }
 
-// TODO
 pub fn stop(args: StopArgs) -> String {
-    let mut stop_options: String = String::new();
+    let mut stop_options = String::new();
 
-    let cmdstr= format!(
+    if args.reboot {
+        stop_options.push_str(" --reboot");
+    }
+
+    if args.nowait {
+        stop_options.push_str(" --nowait");
+    }
+
+    if let Some(timeout) = args.timeout {
+        stop_options.push_str(&format!(" --timeout={}", timeout));
+    }
+
+    if args.kill {
+        stop_options.push_str(" --kill");
+    }
+
+    if args.nolock {
+        stop_options.push_str(" --nolock");
+    }
+
+    if args.nokill {
+        stop_options.push_str(" --nokill");
+    }
+
+    if let Some(rcfile) = args.rcfile {
+        stop_options.push_str(&format!(" --rcfile={}", rcfile));
+    }
+
+    let cmdstr = format!(
         "lxc-stop --name={}{}",
         args.name,
-        stop_options,
+        stop_options
     );
 
-    return cmdstr;
+    cmdstr
 }
 
-// TODO
+
 pub fn list(args: ListArgs) -> String {
-    let mut list_options: String = String::new();
+    let mut list_options = String::new();
 
-    let cmdstr= format!(
-        "lxc-list --name={}{}",
-        args.name,
-        list_options,
+    if args.line {
+        list_options.push_str(" --line");
+    }
+
+    if args.fancy {
+        list_options.push_str(" --fancy");
+    }
+
+    if let Some(fancy_format) = args.fancy_format {
+        list_options.push_str(&format!(" --fancy-format={}", fancy_format));
+    }
+
+    if args.active {
+        list_options.push_str(" --active");
+    }
+
+    if args.running {
+        list_options.push_str(" --running");
+    }
+
+    if args.frozen {
+        list_options.push_str(" --frozen");
+    }
+
+    if args.stopped {
+        list_options.push_str(" --stopped");
+    }
+
+    if args.defined {
+        list_options.push_str(" --defined");
+    }
+
+    if let Some(nesting) = args.nesting {
+        list_options.push_str(&format!(" --nesting={}", nesting));
+    }
+
+    if let Some(filter) = args.filter {
+        list_options.push_str(&format!(" --filter={}", filter));
+    }
+
+    if let Some(groups) = args.groups {
+        list_options.push_str(&format!(" --groups={}", groups.join(",")));
+    }
+
+    let cmdstr = format!(
+        "lxc-ls{}",
+        list_options
     );
 
-    return cmdstr;
+    cmdstr
 }
 
-// TODO
+
 pub fn copy(args: CopyArgs) -> String {
     let mut copy_options: String = String::new();
 
-    let cmdstr= format!(
-        "lxc-copy --name={}{}",
-        args.name,
-        copy_options,
-    );
+    // Get source location
+    let mut source_path = String::new();
+    let source_location: Vec<&str> = args.source.split(':').collect();
+    if args.source.contains(':') && source_location.len() > 1{
+        // Find rootfs path
+        source_path = (Exec::shell(&format!("lxc-info --name={} --config=lxc.rootfs.path", source_location[0])) | Exec::shell("cut -c 19-")).capture().unwrap().stdout_str().trim().to_string();
+        source_path.push_str(source_location[1]);
+    }else{
+        source_path.push_str(source_location[0]);
+    }
+    
 
-    return cmdstr;
+    // Get destination location
+    let mut destination_path = String::new();
+    let destination_location: Vec<&str> = args.destination.split(':').collect();
+    if args.destination.contains(':') && destination_location.len() > 1{
+        // Find rootfs path
+        destination_path = (Exec::shell(&format!("lxc-info --name={} --config=lxc.rootfs.path", destination_location[0])) | Exec::shell("cut -c 19-")).capture().unwrap().stdout_str().trim().to_string();
+        destination_path.push_str(destination_location[1]);
+    }else{
+        destination_path.push_str(destination_location[0]);
+    } 
+
+    if args.follow_link{
+        copy_options.push_str(" --dereference");
+    }
+
+    if args.archive{
+        copy_options.push_str(" --archive");
+    }
+
+    // Copy recursively and follows symbolic links
+    let cmdstr = format!("cp {} {} {}", copy_options, source_path, destination_path);
+
+    cmdstr
 }
 
 // TODO
 pub fn config(args: ConfigArgs) -> String {
     let mut config_options: String = String::new();
 
-    let cmdstr= format!(
-        "lxc-config --name={}{}",
-        args.name,
-        config_options,
-    );
+    let cmdstr = format!("lxc-config --name={}{}", args.name, config_options,);
 
-    return cmdstr;
+    cmdstr
 }

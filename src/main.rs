@@ -102,8 +102,7 @@ struct CreateArgs {
         short,
         long,
         value_name = "DIR",
-        default_value = "/var/lib/lxc/container/rootfs",
-        help = "Place rootfs directory under DIR"
+        help = "Place rootfs directory under DIR [default: /var/lib/lxc/<container-name>/rootfs]"
     )]
     dir: Option<String>,
 
@@ -120,7 +119,6 @@ struct CreateArgs {
 )]
 struct DeleteArgs {
     #[arg(
-        value_delimiter = ',',
         value_name = "NAME",
         help = "Name of containers to delete"
     )]
@@ -345,8 +343,6 @@ struct StartArgs {
 )]
 struct StopArgs {
     #[arg(
-        short,
-        long,
         value_name = "NAME",
         help = "NAME of the container",
         required = true
@@ -409,9 +405,10 @@ struct ListArgs {
         short = 'F',
         long,
         value_name = "COLUMNS",
+        value_delimiter = ',',
         help = "Comma separated list of columns to show in the fancy output (valid columns: NAME, STATE, PID, RAM, SWAP, AUTOSTART, GROUPS, INTERFACE, IPV4 and IPV6, UNPRIVILEGED)"
     )]
-    fancy_format: Option<String>,
+    fancy_format: Option<Vec<String>>,
 
     #[arg(long, help = "List only active containers")]
     active: bool,

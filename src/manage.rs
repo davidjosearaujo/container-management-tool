@@ -232,7 +232,7 @@ pub fn list(args: ListArgs) -> String {
     }
 
     if let Some(fancy_format) = args.fancy_format {
-        list_options.push_str(&format!(" --fancy-format={}", fancy_format));
+        list_options.push_str(&format!(" --fancy-format={}", fancy_format.join(",")));
     }
 
     if args.active {

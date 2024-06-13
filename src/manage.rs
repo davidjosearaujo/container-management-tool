@@ -17,7 +17,8 @@ use std::path::Path;
 use subprocess::Exec;
 
 use crate::{
-    quiet_println, ConfigArgs, CopyArgs, CreateArgs, DeleteArgs, ExecuteArgs, ListArgs, StartArgs, StopArgs
+    ConfigArgs, CopyArgs, CreateArgs, DeleteArgs, ExecuteArgs, ListArgs, StartArgs,
+    StopArgs,
 };
 
 pub fn create(args: CreateArgs) -> String {
@@ -28,9 +29,9 @@ pub fn create(args: CreateArgs) -> String {
 
     if args.dir.is_some() {
         if !Path::new(args.dir.clone().unwrap().as_str()).exists() {
-                _ = std::fs::create_dir(args.dir.clone().unwrap().as_str());
-            }
-        create_options.push_str(&format!(" --dir={}",args.dir.unwrap().as_str()));
+            _ = std::fs::create_dir(args.dir.clone().unwrap().as_str());
+        }
+        create_options.push_str(&format!(" --dir={}", args.dir.unwrap().as_str()));
     }
 
     // Parse template
@@ -121,7 +122,7 @@ pub fn execute(args: ExecuteArgs) -> String {
 
     let cmdstr = format!(
         "lxc-attach --name={} {} -- {}",
-        args.name, execute_options, args.command
+        args.name, execute_options, args.command.join(" ").as_str()
     );
 
     cmdstr
@@ -214,15 +215,10 @@ pub fn stop(args: StopArgs) -> String {
         stop_options.push_str(&format!(" --rcfile={}", rcfile));
     }
 
-    let cmdstr = format!(
-        "lxc-stop --name={}{}",
-        args.name,
-        stop_options
-    );
+    let cmdstr = format!("lxc-stop --name={}{}", args.name, stop_options);
 
     cmdstr
 }
-
 
 pub fn list(args: ListArgs) -> String {
     let mut list_options = String::new();
@@ -271,14 +267,10 @@ pub fn list(args: ListArgs) -> String {
         list_options.push_str(&format!(" --groups={}", groups.join(",")));
     }
 
-    let cmdstr = format!(
-        "lxc-ls{}",
-        list_options
-    );
+    let cmdstr = format!("lxc-ls{}", list_options);
 
     cmdstr
 }
-
 
 pub fn copy(args: CopyArgs) -> String {
     let mut copy_options: String = String::from("--recursive");
@@ -286,31 +278,46 @@ pub fn copy(args: CopyArgs) -> String {
     // Get source location
     let mut source_path = String::new();
     let source_location: Vec<&str> = args.source.split(':').collect();
-    if args.source.contains(':') && source_location.len() > 1{
+    if args.source.contains(':') && source_location.len() > 1 {
         // Find rootfs path
-        source_path = (Exec::shell(&format!("lxc-info --name={} --config=lxc.rootfs.path", source_location[0])) | Exec::shell("cut -c 19-")).capture().unwrap().stdout_str().trim().to_string();
+        source_path = (Exec::shell(&format!(
+            "lxc-info --name={} --config=lxc.rootfs.path",
+            source_location[0]
+        )) | Exec::shell("cut -c 19-"))
+        .capture()
+        .unwrap()
+        .stdout_str()
+        .trim()
+        .to_string();
         source_path.push_str(source_location[1]);
-    }else{
+    } else {
         source_path.push_str(source_location[0]);
     }
-    
 
     // Get destination location
     let mut destination_path = String::new();
     let destination_location: Vec<&str> = args.destination.split(':').collect();
-    if args.destination.contains(':') && destination_location.len() > 1{
+    if args.destination.contains(':') && destination_location.len() > 1 {
         // Find rootfs path
-        destination_path = (Exec::shell(&format!("lxc-info --name={} --config=lxc.rootfs.path", destination_location[0])) | Exec::shell("cut -c 19-")).capture().unwrap().stdout_str().trim().to_string();
+        destination_path = (Exec::shell(&format!(
+            "lxc-info --name={} --config=lxc.rootfs.path",
+            destination_location[0]
+        )) | Exec::shell("cut -c 19-"))
+        .capture()
+        .unwrap()
+        .stdout_str()
+        .trim()
+        .to_string();
         destination_path.push_str(destination_location[1]);
-    }else{
+    } else {
         destination_path.push_str(destination_location[0]);
-    } 
+    }
 
-    if args.follow_link{
+    if args.follow_link {
         copy_options.push_str(" --dereference");
     }
 
-    if args.archive{
+    if args.archive {
         copy_options.push_str(" --archive");
     }
 
@@ -321,23 +328,24 @@ pub fn copy(args: CopyArgs) -> String {
 }
 
 pub fn config(args: ConfigArgs) -> String {
-
     let mut cmdstr: String = String::new();
 
     let mut config_options: String = String::new();
-    
-    if let Some(state_object) = args.state_object{
-        cmdstr.push_str(&format!("lxc-cgroup --name={}", args.name));
-        
-        config_options.push_str(&format!(" {}",state_object[0]));
-        if state_object.len() > 1 {
-            config_options.push_str(&format!(" \"{}\"",state_object[1]));
-        }
-    }else {
-        cmdstr.push_str(&format!("lxc-info --name={}", args.name));
-    }
 
-    // TODO: Filter remaining options
+    if let Some(state_object) = args.state_object {
+        cmdstr.push_str(&format!("lxc-cgroup --name={}", args.name));
+
+        config_options.push_str(&format!(" {}", state_object[0]));
+        if state_object.len() > 1 {
+            config_options.push_str(&format!(" {}", state_object[1]));
+        }
+    } else {
+        cmdstr.push_str(&format!("lxc-info --name={}", args.name));
+
+        if let Some(config) = args.config {
+            config_options.push_str(&format!(" --config={}", config));
+        }
+    }
 
     cmdstr.push_str(config_options.as_str());
 

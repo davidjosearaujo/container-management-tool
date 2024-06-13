@@ -13,13 +13,9 @@
 // limitations under the License.
 
 mod manage;
-mod utils;
 
 use clap::{Args, Parser, Subcommand};
-use std::sync::atomic::Ordering;
-
-#[macro_use]
-extern crate lazy_static;
+use std::process::{Command, Stdio};
 
 #[derive(Debug, Parser)] // requires `derive` feature
 #[command(
@@ -150,8 +146,8 @@ struct ExecuteArgs {
     #[arg(required = true, value_name = "NAME", help = "NAME of the container")]
     name: String,
 
-    #[arg(required = true, help = "COMMAND to execute into this container")]
-    command: String,
+    #[arg(last = true, num_args = 1.., help = "COMMAND to execute into this container [leave empty to attach shell]")]
+    command: Vec<String>,
 
     #[arg(
         short,
@@ -242,7 +238,7 @@ struct ExecuteArgs {
     #[arg(
         short,
         long,
-        value_name="context",
+        value_name = "context",
         help = "SELinux Context to transition into"
     )]
     context: Option<String>,
@@ -499,7 +495,7 @@ struct ConfigArgs {
         long,
         value_name = "VALUE",
         value_delimiter = ':',
-        help = "Value of a state object (for example, 'cpuset.cpus:0,3)"
+        help = "Value of a state object (for example, 'cpuset.cpus:0,3')"
     )]
     state_object: Option<Vec<String>>,
 
@@ -510,32 +506,13 @@ struct ConfigArgs {
         help = "Show configuration variable KEY from running container"
     )]
     config: Option<String>,
-
-    #[arg(short, long, help = "Shows the IP addresses")]
-    ips: bool,
-
-    #[arg(short, long, help = "Shows the process id of the init container")]
-    pid: bool,
-
-    #[arg(short = 'S', long, help = "Shows usage stats")]
-    stats: bool,
-
-    #[arg(short = 'H', long, help = "Shows stats as raw numbers, not humanized")]
-    no_humanize: bool,
-
-    #[arg(short, long, help = "shows the state of the container")]
-    state: bool,
 }
 
 fn main() {
     match CmtCli::try_parse() {
         Ok(cli) => {
-            quiet_println!("CLI arguments parsed successfully");
-
-            // Quiet mode suppresses all stdout
-            if cli.quiet {
-                utils::QUIET.store(true, Ordering::SeqCst);
-            }
+            // Quiet mode redirects everything to /dev/null
+            let (stdout, stderr) = if cli.quiet { (Stdio::null(), Stdio::null()) } else {(Stdio::inherit(), Stdio::inherit())};
 
             // Command's global flags
             let mut global_options: String = String::new();
@@ -566,13 +543,23 @@ fn main() {
                 _ => {}
             };
 
-            // TODO: Execute command
-            quiet_println!("{:?}", cmdstr);
-            //let executable_command: String = format!();
-            //Exec::shell(executable_command);
+            let mut command_and_args: Vec<&str> = cmdstr.split_whitespace().collect();
+
+            match Command::new(command_and_args[0])
+                .args(command_and_args.split_off(1))
+                .stdout(stdout)
+                .stderr(stderr)
+                .spawn()
+            {
+                Ok(mut shell) => {
+                    let _ = shell.wait();
+                }
+                Err(e) => {
+                    println!("{:?}", e);
+                }
+            }
         }
         Err(e) => {
-            quiet_println!("Error parsing input! Please try again.\n");
             _ = e.print();
         }
     }

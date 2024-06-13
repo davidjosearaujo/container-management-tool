@@ -483,6 +483,7 @@ struct CopyArgs {
     follow_link: bool,
 }
 
+// Aggregates lxc-info and lxc-cgroup
 #[derive(Debug, Args)]
 #[command(
     version,
@@ -494,14 +495,11 @@ struct ConfigArgs {
     #[arg(value_name = "NAME", help = "Name of container")]
     name: String,
 
-    #[arg(long, value_name = "FILE", help = "Load configuration file FILE")]
-    rcfile: Option<String>,
-
     #[arg(
         long,
-        value_delimiter = ',',
-        value_name = "value",
-        help = "Value of a state object (for example, 'cpuset.cpus')"
+        value_name = "VALUE",
+        value_delimiter = ':',
+        help = "Value of a state object (for example, 'cpuset.cpus:0,3)"
     )]
     state_object: Option<Vec<String>>,
 

@@ -281,7 +281,7 @@ pub fn list(args: ListArgs) -> String {
 
 
 pub fn copy(args: CopyArgs) -> String {
-    let mut copy_options: String = String::new();
+    let mut copy_options: String = String::from("--recursive");
 
     // Get source location
     let mut source_path = String::new();
@@ -320,11 +320,26 @@ pub fn copy(args: CopyArgs) -> String {
     cmdstr
 }
 
-// TODO
 pub fn config(args: ConfigArgs) -> String {
-    let mut config_options: String = String::new();
 
-    let cmdstr = format!("lxc-config --name={}{}", args.name, config_options,);
+    let mut cmdstr: String = String::new();
+
+    let mut config_options: String = String::new();
+    
+    if let Some(state_object) = args.state_object{
+        cmdstr.push_str(&format!("lxc-cgroup --name={}", args.name));
+        
+        config_options.push_str(&format!(" {}",state_object[0]));
+        if state_object.len() > 1 {
+            config_options.push_str(&format!(" \"{}\"",state_object[1]));
+        }
+    }else {
+        cmdstr.push_str(&format!("lxc-info --name={}", args.name));
+    }
+
+    // TODO: Filter remaining options
+
+    cmdstr.push_str(config_options.as_str());
 
     cmdstr
 }

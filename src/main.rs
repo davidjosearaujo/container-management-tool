@@ -68,6 +68,7 @@ enum Subcommands {
     List(ListArgs),
     Copy(CopyArgs),
     Config(ConfigArgs),
+    Build(BuildArgs),
 }
 
 #[derive(Debug, Args)]
@@ -118,10 +119,7 @@ struct CreateArgs {
     visible_aliases = ["rm", "destroy"]
 )]
 struct DeleteArgs {
-    #[arg(
-        value_name = "NAME",
-        help = "Name of containers to delete"
-    )]
+    #[arg(value_name = "NAME", help = "Name of containers to delete")]
     name: String,
 
     #[arg(short, long, help = "destroy including all snapshots")]
@@ -342,11 +340,7 @@ struct StartArgs {
     visible_aliases = ["halt", "terminate"]
 )]
 struct StopArgs {
-    #[arg(
-        value_name = "NAME",
-        help = "NAME of the container",
-        required = true
-    )]
+    #[arg(value_name = "NAME", help = "NAME of the container", required = true)]
     name: String,
 
     #[arg(short, long, help = "Reboot the container")]
@@ -505,11 +499,34 @@ struct ConfigArgs {
     config: Option<String>,
 }
 
+#[derive(Debug, Args)]
+#[command(version, about, long_about = "Build an image from a LXCfile")]
+struct BuildArgs {
+    #[arg(
+        value_name = "PATH",
+        default_value = ".",
+        help = "PATH to the environment from where to build the container"
+    )]
+    path: Option<String>,
+
+    #[arg(
+        short,
+        long,
+        default_value = "LXCfile.toml",
+        help = "Name of the Dockerfile"
+    )]
+    file: Option<String>,
+}
+
 fn main() {
     match CmtCli::try_parse() {
         Ok(cli) => {
             // Quiet mode redirects everything to /dev/null
-            let (stdout, stderr) = if cli.quiet { (Stdio::null(), Stdio::null()) } else {(Stdio::inherit(), Stdio::inherit())};
+            let (stdout, stderr) = if cli.quiet {
+                (Stdio::null(), Stdio::null())
+            } else {
+                (Stdio::inherit(), Stdio::inherit())
+            };
 
             // Command's global flags
             let mut global_options: String = String::new();
@@ -537,6 +554,7 @@ fn main() {
                 Some(Subcommands::List(args)) => cmdstr = manage::list(args),
                 Some(Subcommands::Copy(args)) => cmdstr = manage::copy(args),
                 Some(Subcommands::Config(args)) => cmdstr = manage::config(args),
+                Some(Subcommands::Build(args)) => cmdstr = manage::build(args),
                 _ => {}
             };
 

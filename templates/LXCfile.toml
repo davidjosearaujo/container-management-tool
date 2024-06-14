@@ -1,0 +1,30 @@
+name = "mycontainer"
+entrypoint = "startup.sh"
+
+# Create a shell script locally with the command
+# and the copy this shell script to the containers
+# /etc/init.d directory and gives it execution privileges
+
+[image]
+distro = "alpine"
+release = "3.19"
+arch = "amd64"
+# dir = /path/to/rootfs
+
+[limits]
+cpus = [1,2]
+
+[[copy]]
+host = "."
+container = "."
+
+[[shared]]
+host = "/host/path/to/volume"
+container = "container/mount/point"
+
+[[port]]
+host = 3000
+container = 3000
+
+[[run]]
+cmd = "echo hello"

@@ -12,26 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::Path;
+use std::{fs, path::Path};
 
 use subprocess::Exec;
 
+use toml::{Table};
+
 use crate::{
-    ConfigArgs, CopyArgs, CreateArgs, DeleteArgs, ExecuteArgs, ListArgs, StartArgs,
+    BuildArgs, ConfigArgs, CopyArgs, CreateArgs, DeleteArgs, ExecuteArgs, ListArgs, StartArgs,
     StopArgs,
 };
 
 pub fn create(args: CreateArgs) -> String {
     let mut create_options: String = String::new();
-    if args.config.is_some() {
+    if args.config.is_some() && !args.config.as_ref().unwrap().is_empty() {
         create_options.push_str(&format!(" --config={}", args.config.unwrap()));
     }
 
-    if args.dir.is_some() {
+    if args.dir.is_some() && !args.dir.as_ref().unwrap().is_empty() {
         if !Path::new(args.dir.clone().unwrap().as_str()).exists() {
             _ = std::fs::create_dir(args.dir.clone().unwrap().as_str());
         }
         create_options.push_str(&format!(" --dir={}", args.dir.unwrap().as_str()));
+    }
+
+    if args.network.is_some() && !args.network.as_ref().unwrap().is_empty() {
+        create_options.push_str(&format!(" --network={}", args.network.unwrap()));
     }
 
     // Parse template
@@ -43,6 +49,7 @@ pub fn create(args: CreateArgs) -> String {
     );
 
     cmdstr
+
 }
 
 pub fn delete(args: DeleteArgs) -> String {
@@ -350,4 +357,44 @@ pub fn config(args: ConfigArgs) -> String {
     cmdstr.push_str(config_options.as_str());
 
     cmdstr
+}
+
+pub fn build(args: BuildArgs) -> String {
+    let lxcfilepath = format!("{}/{}", args.path.unwrap(), args.file.unwrap());
+
+    // Parse file
+    let contents = fs::read_to_string(lxcfilepath).expect("File not found");
+
+    // Create container
+    let container = contents.parse::<Table>().unwrap();
+
+    let image = format!("{}:{}:{}",
+        container["image"]["distro"].to_string().trim_matches('\"'),
+        container["image"]["release"].to_string().trim_matches('\"'),
+        container["image"]["arch"].to_string().trim_matches('\"'),
+    );
+
+    let config = if container["image"].as_table().unwrap().contains_key("config") { Some(container["image"]["config"].to_string()) } else { Some(String::default()) };
+
+    let dir = if container["image"].as_table().unwrap().contains_key("dir") { Some(container["image"]["dir"].to_string()) } else { Some(String::default()) };
+
+    let network = if container["image"].as_table().unwrap().contains_key("network") { Some(container["image"]["network"].to_string()) } else { Some(String::default()) };
+
+    // Create container
+    let create_cmd: CreateArgs = CreateArgs {
+        name: container["name"].to_string(),
+        image: image,
+        config: config,
+        dir: dir,
+        network: network,
+    };
+
+    // TODO: Generates cgroup command
+    // TODO: Generate a copy command
+    // TODO: Generate shared volume command
+    // TODO: Generate port bindind
+    // TODO: Generate execute commands
+    // TODO: Generate entrypoint shell script
+
+    return String::from("echo hello");
 }

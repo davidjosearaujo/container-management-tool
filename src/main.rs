@@ -521,13 +521,6 @@ struct BuildArgs {
 fn main() {
     match CmtCli::try_parse() {
         Ok(cli) => {
-            // Quiet mode redirects everything to /dev/null
-            let (stdout, stderr) = if cli.quiet {
-                (Stdio::null(), Stdio::null())
-            } else {
-                (Stdio::inherit(), Stdio::inherit())
-            };
-
             // Command's global flags
             let mut global_options: String = String::new();
 
@@ -544,7 +537,7 @@ fn main() {
             }
 
             // Build command based on subcommands.
-            let mut cmdstr: String = String::new();
+            let mut cmdstr: Vec<String> = Vec::new();
             match cli.sub {
                 Some(Subcommands::Create(args)) => cmdstr = manage::create(args),
                 Some(Subcommands::Delete(args)) => cmdstr = manage::delete(args),
@@ -558,21 +551,32 @@ fn main() {
                 _ => {}
             };
 
-            let mut command_and_args: Vec<&str> = cmdstr.split_whitespace().collect();
+            for cmd in cmdstr {
+                // Quiet mode redirects everything to /dev/null
+                let (stdout, stderr) = if cli.quiet {
+                    (Stdio::null(), Stdio::null())
+                } else {
+                    (Stdio::inherit(), Stdio::inherit())
+                };
 
-            match Command::new(command_and_args[0])
-                .args(command_and_args.split_off(1))
-                .stdout(stdout)
-                .stderr(stderr)
-                .spawn()
-            {
-                Ok(mut shell) => {
-                    let _ = shell.wait();
-                }
-                Err(e) => {
-                    println!("{:?}", e);
+                let mut command_and_args: Vec<&str> = cmd.split_whitespace().collect();
+
+                match Command::new(command_and_args[0])
+                    .args(command_and_args.split_off(1))
+                    .stdout(stdout)
+                    .stderr(stderr)
+                    .spawn()
+                {
+                    Ok(mut shell) => {
+                        let _ = shell.wait();
+                    }
+                    Err(e) => {
+                        println!("{:?}", e);
+                    }
                 }
             }
+
+            
         }
         Err(e) => {
             _ = e.print();

@@ -1,30 +1,32 @@
 name = "mycontainer"
-entrypoint = "startup.sh"
-
-# Create a shell script locally with the command
-# and the copy this shell script to the containers
-# /etc/init.d directory and gives it execution privileges
+entrypoint = "echo Hello, I started at $(date)"
 
 [image]
 distro = "alpine"
 release = "3.19"
 arch = "amd64"
-# dir = /path/to/rootfs
+#dir = /path/to/rootfs
 
-[limits]
-cpus = [1,2]
+#[limits]
+#cpuset_cpus = "1,2"
+#lxc_cgroup2_cpu_uclamp_max = 2048
+
+#[[copy]]
+#host = "."
+#container = "/"
+#follow_link = true
 
 [[copy]]
-host = "."
-container = "."
+host = "../../README.md"
+container = "./README.md"
+#archive = true
 
 [[shared]]
-host = "/host/path/to/volume"
-container = "container/mount/point"
-
-[[port]]
-host = 3000
-container = 3000
+host = "/home/davidjosearaujo/Downloads"
+container = "/mount/point"
 
 [[run]]
-cmd = "echo hello"
+cmd = "touch hello"
+
+[[run]]
+cmd = "touch bye"

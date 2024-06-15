@@ -438,11 +438,13 @@ pub fn build(args: BuildArgs) -> Vec<String> {
         println!("[+] Container created");
     }
 
+    // WARNING: Currently not working, it doesn't break the deploy
+    // but the command isn't being executed on container boot up 😢
+    // 
     // Create a shell script locally with the command
     // and the copy this shell script to the containers
-    // /etc/init.d directory and gives it execution privileges
     if container_build_file.contains_key("entrypoint") {
-        // Enable container configuration
+        // Enables boot-time execution by placing it in /etc/profile.d dir
         let path: String = if dir.clone().is_some_and(|dir| !dir.is_empty()) {
             format!("{}/etc/profile.d/lxcapp.sh", dir.clone().unwrap())
         } else {
@@ -452,14 +454,14 @@ pub fn build(args: BuildArgs) -> Vec<String> {
             )
         };
 
-        // Create executable for entrypoint
+        // Create executable /etc/profile.d/lxcapp.sh
         let mut container_config_file = OpenOptions::new()
             .create_new(true)
             .append(true)
             .open(path)
             .unwrap();
 
-        // Write commands to script
+        // Writes commands from the entrypoint to the script /etc/profile.d/lxcapp.sh
         _ = writeln!(
             container_config_file,
             "#!/bin/sh\n{}",
@@ -471,7 +473,7 @@ pub fn build(args: BuildArgs) -> Vec<String> {
         );
         let _ = container_config_file.flush();
 
-        // Set as an executable
+        // Set execution permissions 
         let mut perm = container_config_file.metadata().unwrap().permissions();
         perm.set_mode(0o555);
         let _ = container_config_file.set_permissions(perm);
@@ -527,12 +529,12 @@ pub fn build(args: BuildArgs) -> Vec<String> {
         if let Some(locations) = container_build_file["shared"].as_array() {
             for location in locations {
                 let location_table = location.as_table().unwrap();
-                // Creates mount dir in host
+                // Creates mount directory at the host, if it does not exist already
                 if !Path::new(&location_table["host"].to_string()).exists() {
                     run_command(format!("mkdir -p {}", location_table["host"]));
                 }
 
-                // Enable container configuration
+                // Edits container configuration file and enables volume mounting
                 let mut container_config_file = OpenOptions::new()
                     .append(true)
                     .open(format!("/var/lib/lxc/{}/config", container_name))
@@ -568,7 +570,7 @@ pub fn build(args: BuildArgs) -> Vec<String> {
                 if unsafe { STDOUT } {
                     println!(" => {}", cmd.clone());
                 }
-                // Run command in content
+                // Runs commands
                 run_command(run_content_command.clone());
             }
         }
@@ -578,6 +580,7 @@ pub fn build(args: BuildArgs) -> Vec<String> {
     if container_build_file.contains_key("limits") {
         let limits_table = container_build_file["limits"].as_table().unwrap();
 
+        // Applies limitation to system resources via `lxc-cgroups`
         for limit in limits_table {
             let config_command = config(ConfigArgs {
                 name: container_name.clone(),

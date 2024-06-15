@@ -557,9 +557,9 @@ fn main() {
             };
 
             for cmd in cmdstr {
-                // Quiet mode redirects everything to /dev/null
                 let mut command_and_args: Vec<&str> = cmd.split_whitespace().collect();
 
+                // Quiet mode redirects everything to /dev/null
                 let mut stdout = Stdio::inherit();
                 let mut stderr = Stdio::inherit();
                 if cli.quiet {

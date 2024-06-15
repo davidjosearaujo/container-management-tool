@@ -15,7 +15,7 @@
 mod manage;
 
 use clap::{Args, Parser, Subcommand};
-use std::process::{Command, Stdio};
+use std::{process::{Command, Stdio}};
 
 #[derive(Debug, Parser)] // requires `derive` feature
 #[command(
@@ -524,6 +524,11 @@ fn main() {
             // Command's global flags
             let mut global_options: String = String::new();
 
+            if cli.quiet {
+                unsafe { manage::STDOUT = false };
+                unsafe { manage::STDERR = false };
+            }
+
             if cli.logfile.is_some() {
                 global_options.push_str(&format!(" --logfile={}", cli.logfile.unwrap()));
             }
@@ -553,13 +558,14 @@ fn main() {
 
             for cmd in cmdstr {
                 // Quiet mode redirects everything to /dev/null
-                let (stdout, stderr) = if cli.quiet {
-                    (Stdio::null(), Stdio::null())
-                } else {
-                    (Stdio::inherit(), Stdio::inherit())
-                };
-
                 let mut command_and_args: Vec<&str> = cmd.split_whitespace().collect();
+
+                let mut stdout = Stdio::inherit();
+                let mut stderr = Stdio::inherit();
+                if cli.quiet {
+                    stdout = Stdio::null();
+                    stderr = Stdio::null();
+                }
 
                 match Command::new(command_and_args[0])
                     .args(command_and_args.split_off(1))

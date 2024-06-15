@@ -26,6 +26,9 @@ use crate::{
     StopArgs,
 };
 
+pub static mut STDOUT: bool = true;
+pub static mut STDERR: bool = true;
+
 pub fn create(args: CreateArgs) -> Vec<String> {
     let mut create_options: String = String::new();
     if args.config.is_some() && !args.config.as_ref().unwrap().is_empty() {
@@ -431,7 +434,53 @@ pub fn build(args: BuildArgs) -> Vec<String> {
     });
     // Create container
     run_command(create_command[0].clone());
+    if unsafe { STDOUT } {
+        println!("[+] Container created");
+    }
+
+    // Create a shell script locally with the command
+    // and the copy this shell script to the containers
+    // /etc/init.d directory and gives it execution privileges
+    if container_build_file.contains_key("entrypoint") {
+        // Enable container configuration
+        let path: String = if dir.clone().is_some_and(|dir| !dir.is_empty()) {
+            format!("{}/etc/profile.d/lxcapp.sh", dir.clone().unwrap())
+        } else {
+            format!(
+                "/var/lib/lxc/{}/rootfs/etc/profile.d/lxcapp.sh",
+                container_name
+            )
+        };
+
+        // Create executable for entrypoint
+        let mut container_config_file = OpenOptions::new()
+            .create_new(true)
+            .append(true)
+            .open(path)
+            .unwrap();
+
+        // Write commands to script
+        _ = writeln!(
+            container_config_file,
+            "#!/bin/sh\n{}",
+            container_build_file["entrypoint"]
+                .to_string()
+                .trim_matches('\"')
+                .trim_matches('\'')
+                .to_string()
+        );
+        let _ = container_config_file.flush();
+
+        // Set as an executable
+        let mut perm = container_config_file.metadata().unwrap().permissions();
+        perm.set_mode(0o555);
+        let _ = container_config_file.set_permissions(perm);
+    }
+
     run_command(format!("lxc-start {}", container_name));
+    if unsafe { STDOUT } {
+        println!("[+] Container started");
+    }
 
     // Handle copies. In this case, the source is always
     // the host and the destination is always the container
@@ -468,6 +517,9 @@ pub fn build(args: BuildArgs) -> Vec<String> {
                 run_command(copy_command[0].clone());
             }
         }
+        if unsafe { STDOUT } {
+            println!("[+] Content copied to the container");
+        }
     }
 
     // Handle shared volume
@@ -494,20 +546,28 @@ pub fn build(args: BuildArgs) -> Vec<String> {
                 );
             }
         }
+        if unsafe { STDOUT } {
+            println!("[+] Shared volumes mounted");
+        }
     }
 
     run_command(format!("lxc-stop {}", container_name));
     run_command(format!("lxc-start {}", container_name));
 
+    if unsafe { STDOUT } {
+        println!("[!] Running commands...");
+    }
+
     // Handle run commands
     if container_build_file.contains_key("run") {
         if let Some(commands) = container_build_file["run"].as_array() {
             for command in commands {
-                let run_content_command = format!(
-                    "lxc-attach {} -- {}",
-                    container_name,
-                    command["cmd"].to_string().trim_matches('\"').to_string()
-                );
+                let cmd = command["cmd"].to_string().trim_matches('\"').to_string();
+                let run_content_command =
+                    format!("lxc-attach {} -- {}", container_name, cmd.clone());
+                if unsafe { STDOUT } {
+                    println!(" => {}", cmd.clone());
+                }
                 // Run command in content
                 run_command(run_content_command.clone());
             }
@@ -523,7 +583,7 @@ pub fn build(args: BuildArgs) -> Vec<String> {
                 name: container_name.clone(),
                 state_object: Some(vec![
                     limit.0.replace("_", ".").to_string(),
-                    limit.1.to_string(),
+                    limit.1.to_string().trim_matches('\"').to_string(),
                 ]),
                 config: Some(String::default()),
             });
@@ -531,48 +591,29 @@ pub fn build(args: BuildArgs) -> Vec<String> {
         }
     }
 
-    // Create a shell script locally with the command
-    // and the copy this shell script to the containers
-    // /etc/init.d directory and gives it execution privileges
-    if container_build_file.contains_key("entrypoint") {
-        // Enable container configuration
-        let path: String = if dir.clone().is_some_and(|dir| !dir.is_empty()) {
-            format!("{}/etc/init.d/lxcapp.sh", dir.clone().unwrap())
-        } else {
-            format!(
-                "/var/lib/lxc/{}/rootfs/etc/init.d/lxcapp.sh",
-                container_name
-            )
-        };
-
-        let mut container_config_file = OpenOptions::new()
-            .create_new(true)
-            .append(true)
-            .open(path)
-            .unwrap();
-
-        // Write commands to script
-        _ = writeln!(
-            container_config_file,
-            "{}",
-            container_build_file["entrypoint"].to_string().trim_matches('\"').to_string()
-        );
-
-        // Set as an executable
-        let mut perm = container_config_file.metadata().unwrap().permissions();
-        perm.set_mode(0o555);
-        let _ = container_config_file.set_permissions(perm);
-    }
+    run_command(format!("lxc-stop {}", container_name));
+    run_command(format!("lxc-start {}", container_name));
 
     return vec!["echo [+] Container created".to_string()];
 }
 
 fn run_command(command: String) {
+    let p_out = if unsafe { STDOUT } {
+        Stdio::inherit()
+    } else {
+        Stdio::null()
+    };
+    let p_err = if unsafe { STDERR } {
+        Stdio::inherit()
+    } else {
+        Stdio::null()
+    };
+
     let mut command_and_args: Vec<&str> = command.split_whitespace().collect();
     match Command::new(command_and_args[0])
         .args(command_and_args.split_off(1))
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(p_out)
+        .stderr(p_err)
         .spawn()
     {
         Ok(mut shell) => {

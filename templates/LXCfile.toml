@@ -1,5 +1,8 @@
 name = "mycontainer"
-entrypoint = "echo Hello, I started at $(date)"
+
+#entrypoint = """
+#echo "Hello, I started at $(date)" > /mount/point/proof
+#"""
 
 [image]
 distro = "alpine"
@@ -7,9 +10,8 @@ release = "3.19"
 arch = "amd64"
 #dir = /path/to/rootfs
 
-#[limits]
-#cpuset_cpus = "1,2"
-#lxc_cgroup2_cpu_uclamp_max = 2048
+[limits]
+cpuset_cpus = "1,2"
 
 #[[copy]]
 #host = "."
@@ -23,10 +25,7 @@ container = "./README.md"
 
 [[shared]]
 host = "/home/davidjosearaujo/Downloads"
-container = "/mount/point"
-
-[[run]]
-cmd = "touch hello"
+container = "mount/point"
 
 [[run]]
 cmd = "touch bye"
